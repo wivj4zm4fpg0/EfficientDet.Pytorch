@@ -1,15 +1,14 @@
-import torch
-import cv2
-from PIL import Image
-import matplotlib.pyplot as plt
-from models import EfficientDet
-from torchvision import transforms
-import numpy as np
-import skimage
-from datasets import get_augumentation, VOC_CLASSES
-from timeit import default_timer as timer
 import argparse
 import copy
+from timeit import default_timer as timer
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+
+from datasets import get_augumentation, VOC_CLASSES
+from models import EfficientDet
 from utils import vis_bbox, EFFICIENTDET
 
 parser = argparse.ArgumentParser(description='EfficientDet')
@@ -30,6 +29,7 @@ parser.add_argument('-f', '--file_name', default='pic.jpg',
                     help='Image path')
 parser.add_argument('--num_class', default=21, type=int,
                     help='Number of class used in model')
+parser.add_argument('--video_name', required=False, type=str)
 args = parser.parse_args()
 
 
@@ -39,29 +39,29 @@ class Detect(object):
     """
 
     def __init__(self, weights, num_class=21, network='efficientdet-d0', size_image=(512, 512)):
-        super(Detect,  self).__init__()
+        global checkpoint
+        super(Detect, self).__init__()
         self.weights = weights
         self.size_image = size_image
-        self.device = torch.device(
-            "cuda:0" if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
         self.transform = get_augumentation(phase='test')
-        if(self.weights is not None):
+        if self.weights is not None:
             print('Load pretrained Model')
-            checkpoint = torch.load(
-                self.weights, map_location=lambda storage, loc: storage)
+            checkpoint = torch.load(self.weights, map_location=lambda storage, loc: storage)
             params = checkpoint['parser']
             num_class = params.num_class
             network = params.network
 
-        self.model = EfficientDet(num_classes=num_class,
-                                  network=network,
-                                  W_bifpn=EFFICIENTDET[network]['W_bifpn'],
-                                  D_bifpn=EFFICIENTDET[network]['D_bifpn'],
-                                  D_class=EFFICIENTDET[network]['D_class'],
-                                  is_training=False
-                                  )
+        self.model = EfficientDet(
+            num_classes=num_class,
+            network=network,
+            W_bifpn=EFFICIENTDET[network]['W_bifpn'],
+            D_bifpn=EFFICIENTDET[network]['D_bifpn'],
+            D_class=EFFICIENTDET[network]['D_class'],
+            is_training=False
+        )
 
-        if(self.weights is not None):
+        if self.weights is not None:
             state_dict = checkpoint['state_dict']
             self.model.load_state_dict(state_dict)
         if torch.cuda.is_available():
@@ -82,28 +82,28 @@ class Detect(object):
             bboxes = list()
             labels = list()
             bbox_scores = list()
-            colors = list()
             for j in range(scores.shape[0]):
                 bbox = transformed_anchors[[j], :][0].data.cpu().numpy()
-                x1 = int(bbox[0]*origin_img.shape[1]/self.size_image[1])
-                y1 = int(bbox[1]*origin_img.shape[0]/self.size_image[0])
-                x2 = int(bbox[2]*origin_img.shape[1]/self.size_image[1])
-                y2 = int(bbox[3]*origin_img.shape[0]/self.size_image[0])
+                x1 = int(bbox[0] * origin_img.shape[1] / self.size_image[1])
+                y1 = int(bbox[1] * origin_img.shape[0] / self.size_image[0])
+                x2 = int(bbox[2] * origin_img.shape[1] / self.size_image[1])
+                y2 = int(bbox[3] * origin_img.shape[0] / self.size_image[0])
                 bboxes.append([x1, y1, x2, y2])
                 label_name = VOC_CLASSES[int(classification[[j]])]
                 labels.append(label_name)
 
-                if(args.cam):
+                if args.cam:
                     cv2.rectangle(origin_img, (x1, y1),
                                   (x2, y2), (179, 255, 179), 2, 1)
                 if args.score:
                     score = np.around(
                         scores[[j]].cpu().numpy(), decimals=2) * 100
-                    if(args.cam):
+                    if args.cam:
                         labelSize, baseLine = cv2.getTextSize('{} {}'.format(
                             label_name, int(score)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
                         cv2.rectangle(
-                            origin_img, (x1, y1-labelSize[1]), (x1+labelSize[0], y1+baseLine), (223, 128, 255), cv2.FILLED)
+                            origin_img, (x1, y1 - labelSize[1]), (x1 + labelSize[0], y1 + baseLine), (223, 128, 255),
+                            cv2.FILLED)
                         cv2.putText(
                             origin_img, '{} {}'.format(label_name, int(score)),
                             (x1, y1), cv2.FONT_HERSHEY_SIMPLEX,
@@ -111,11 +111,12 @@ class Detect(object):
                         )
                     bbox_scores.append(int(score))
                 else:
-                    if(args.cam):
+                    if args.cam:
                         labelSize, baseLine = cv2.getTextSize('{}'.format(
                             label_name), cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
                         cv2.rectangle(
-                            origin_img, (x1, y1-labelSize[1]), (x1+labelSize[0], y1+baseLine), (0, 102, 255), cv2.FILLED)
+                            origin_img, (x1, y1 - labelSize[1]), (x1 + labelSize[0], y1 + baseLine), (0, 102, 255),
+                            cv2.FILLED)
                         cv2.putText(
                             origin_img, '{} {}'.format(label_name, int(score)),
                             (x1, y1), cv2.FONT_HERSHEY_SIMPLEX,
@@ -130,7 +131,10 @@ class Detect(object):
                 return origin_img
 
     def camera(self):
-        cap = cv2.VideoCapture(0)
+        if args.video_name:
+            cap = cv2.VideoCapture(args.video_name)
+        else:
+            cap = cv2.VideoCapture(0)
         if not cap.isOpened():
             print("Unable to open camera")
             exit(-1)
@@ -154,7 +158,7 @@ class Detect(object):
             if res:
                 show_image = self.process(img=img)
                 cv2.putText(
-                    show_image, "FPS: " + str(fps), (10,  20),
+                    show_image, "FPS: " + str(fps), (10, 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (204, 51, 51), 2
                 )
 
@@ -170,10 +174,9 @@ class Detect(object):
         cv2.destroyAllWindows()
 
 
-if __name__ == '__main__':
-    detect = Detect(weights=args.weight)
-    print('cam: ', args.cam)
-    if args.cam:
-        detect.camera()
-    else:
-        detect.process(file_name=args.file_name, show=True)
+detect = Detect(weights=args.weight)
+print('cam: ', args.cam)
+if args.cam or args.video_name:
+    detect.camera()
+else:
+    detect.process(file_name=args.file_name, show=True)

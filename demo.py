@@ -162,10 +162,11 @@ class Detect(object):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (204, 51, 51), 2
                 )
 
-                cv2.imshow("Detection", show_image)
-                k = cv2.waitKey(1)
-                if k == 27:
-                    break
+                # cv2.imshow("Detection", show_image)
+                # k = cv2.waitKey(1)
+                # if k == 27:
+                #     break
+                print(f'{fps = }')
             else:
                 print("Unable to read image")
                 exit(-1)
